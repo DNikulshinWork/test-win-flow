@@ -11,8 +11,8 @@ jobs:
       - name: Setup Node 1
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
-          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          choco install tailscale 1c-enterprise-thin-client -y
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-1
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -23,7 +23,6 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          choco install 1c-enterprise-thin-client -y
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
@@ -36,8 +35,8 @@ jobs:
       - name: Setup Node 2
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
-          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          choco install tailscale 1c-enterprise-thin-client -y
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-2
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -48,7 +47,6 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          choco install 1c-enterprise-thin-client -y
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
@@ -61,8 +59,8 @@ jobs:
       - name: Setup Node 3
         shell: powershell
         run: |
-          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
-          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          choco install tailscale 1c-enterprise-thin-client -y
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-3
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
@@ -73,7 +71,6 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          choco install 1c-enterprise-thin-client -y
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
