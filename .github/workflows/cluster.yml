@@ -124,33 +124,35 @@ jobs:
           EOF
           sudo systemctl restart haproxy
 
-      - name: Download & Start ngrok Binary Directly
+      - name: Start ngrok via Docker Container
         run: |
-          # Скачиваем стабильный чистый архив бинарника для Linux x86_64
-          curl -sSL https://equinox.io -o ngrok.tgz
-          tar -xzf ngrok.tgz
-          sudo mv ngrok /usr/local/bin/
-          
-          cat <<EOF > ngrok.yml
+          # Создаем конфигурационный файл ngrok во временной папке
+          mkdir -p /home/runner/ngrok-config
+          cat <<EOF > /home/runner/ngrok-config/ngrok.yml
           version: "2"
           authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
           tunnels:
             rdp:
               proto: tcp
-              addr: 3389
+              addr: host.docker.internal:3389
             stats:
               proto: http
-              addr: 8404
+              addr: host.docker.internal:8404
           EOF
           
-          ngrok start --all --config ngrok.yml --log=stdout > /dev/null &
+          # Запускаем контейнер ngrok с пробросом портов локального хоста
+          docker run -d --name ngrok-agent \
+            --add-host=host.docker.internal:host-gateway \
+            -v /home/runner/ngrok-config:/etc/ngrok \
+            ngrok/ngrok:latest start --all --config /etc/ngrok/ngrok.yml
+          
           sleep 7
           
           echo "=========================================================="
           echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url' 2>/dev/null || docker logs ngrok-agent 2>&1 | grep -o 'tcp://[^ ]*'
           echo "----------------------------------------------------------"
           echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url' 2>/dev/null || docker logs ngrok-agent 2>&1 | grep -o 'https://[^ ]*'
           echo "=========================================================="
           sleep 21600
