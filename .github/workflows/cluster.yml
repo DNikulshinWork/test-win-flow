@@ -126,7 +126,6 @@ jobs:
 
       - name: Start ngrok via Docker Container
         run: |
-          # Создаем конфигурационный файл ngrok во временной папке
           mkdir -p /home/runner/ngrok-config
           cat <<EOF > /home/runner/ngrok-config/ngrok.yml
           version: "2"
@@ -140,19 +139,19 @@ jobs:
               addr: host.docker.internal:8404
           EOF
           
-          # Запускаем контейнер ngrok с пробросом портов локального хоста
           docker run -d --name ngrok-agent \
+            -p 4040:4040 \
             --add-host=host.docker.internal:host-gateway \
             -v /home/runner/ngrok-config:/etc/ngrok \
             ngrok/ngrok:latest start --all --config /etc/ngrok/ngrok.yml
           
-          sleep 7
+          sleep 10
           
           echo "=========================================================="
           echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url' 2>/dev/null || docker logs ngrok-agent 2>&1 | grep -o 'tcp://[^ ]*'
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
           echo "----------------------------------------------------------"
           echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url' 2>/dev/null || docker logs ngrok-agent 2>&1 | grep -o 'https://[^ ]*'
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
           echo "=========================================================="
           sleep 21600
