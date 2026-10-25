@@ -90,7 +90,7 @@ jobs:
         shell: powershell
         run: Start-Sleep -Seconds 21000
 
-  # --- БАЛАНСИРОВЩИК: Tailscale на хосте + HAProxy и FRP в host-network ---
+  # --- БАЛАНСИРОВЩИК: Tailscale на хосте + HAProxy в host-network + публичный туннель ---
   load-balancer:
     runs-on: ubuntu-latest
     timeout-minutes: 350
@@ -172,44 +172,47 @@ jobs:
           docker logs haproxy
           curl -sf -u admin:adminpass http://127.0.0.1:8404/ >/dev/null && echo "HAProxy stats OK"
 
-      - name: FRP tunnel
+      - name: Public tunnel (bore.pub, fallback pinggy)
         run: |
-          RDP_PORT=$((15000 + RANDOM % 20000))
-          STATS_PORT=$((36000 + RANDOM % 20000))
-          mkdir -p "$HOME/frp"
-          cat <<EOF > "$HOME/frp/frpc.toml"
-          serverAddr = "v2.frp.one"
-          serverPort = 7000
+          start_bore() {  # $1 = имя контейнера, $2 = локальный порт
+            docker rm -f "$1" >/dev/null 2>&1 || true
+            docker run -d --name "$1" --network host ekzhang/bore local "$2" --to bore.pub >/dev/null
+            for i in $(seq 1 20); do
+              p=$(docker logs "$1" 2>&1 | grep -oE 'bore\.pub:[0-9]+' | head -1 || true)
+              if [ -n "$p" ]; then echo "$p"; return 0; fi
+              sleep 1
+            done
+            docker logs "$1" >&2
+            return 1
+          }
 
-          [[proxies]]
-          name = "rdp-${{ github.run_id }}"
-          type = "tcp"
-          localIP = "127.0.0.1"
-          localPort = 3389
-          remotePort = ${RDP_PORT}
+          RDP_ADDR=$(start_bore bore-rdp 3389) || RDP_ADDR=""
+          STATS_ADDR=$(start_bore bore-stats 8404) || STATS_ADDR=""
 
-          [[proxies]]
-          name = "stats-${{ github.run_id }}"
-          type = "tcp"
-          localIP = "127.0.0.1"
-          localPort = 8404
-          remotePort = ${STATS_PORT}
-          EOF
+          if [ -z "$RDP_ADDR" ]; then
+            echo "bore недоступен, пробуем pinggy (сессия до 60 мин)"
+            nohup ssh -p 443 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 \
+              -o ExitOnForwardFailure=yes -R0:localhost:3389 tcp@a.pinggy.io \
+              < /dev/null > "$HOME/pinggy.log" 2>&1 &
+            for i in $(seq 1 30); do
+              RDP_ADDR=$(grep -oE '[a-z0-9.-]+\.pinggy\.link:[0-9]+' "$HOME/pinggy.log" | head -1 || true)
+              if [ -n "$RDP_ADDR" ]; then break; fi
+              sleep 1
+            done
+            cat "$HOME/pinggy.log" || true
+          fi
 
-          docker run -d --name frpc --network host \
-            -v "$HOME/frp:/etc/frp:ro" fatedier/frpc:v0.54.0 -c /etc/frp/frpc.toml
-          sleep 8
-          docker logs frpc
-
-          if ! docker logs frpc 2>&1 | grep -q "start proxy success"; then
-            echo "::error::FRP-прокси не поднялись (порт запрещён сервером или сервер недоступен), см. лог выше"
+          if [ -z "$RDP_ADDR" ]; then
+            echo "::error::Ни bore, ни pinggy не дали публичный адрес, см. логи выше"
             exit 1
           fi
 
           echo "=========================================================="
-          echo "aRDP:   Host v2.frp.one   Port $RDP_PORT"
+          echo "aRDP:   Host ${RDP_ADDR%%:*}   Port ${RDP_ADDR##*:}"
           echo "        user: test   password: test   домен: ПУСТО"
-          echo "Stats:  http://v2.frp.one:$STATS_PORT  (admin / adminpass)"
+          if [ -n "$STATS_ADDR" ]; then
+            echo "Stats:  http://$STATS_ADDR  (admin / adminpass)"
+          fi
           echo "=========================================================="
 
       - name: Keep alive
