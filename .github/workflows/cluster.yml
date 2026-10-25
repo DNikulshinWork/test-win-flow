@@ -25,9 +25,12 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
-          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
-          Start-Sleep -Seconds 21600
+          $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\IniFileMapping\system.ini\boot"
+          $logonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Authentication\LogonUI\SessionEnv\$userSID"
+          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SubSystems" -Force -ErrorAction SilentlyContinue
+          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
+          New-Item -Path $targetKey -Force
+          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
 
   win-node-2:
     runs-on: windows-2025
@@ -49,9 +52,9 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
-          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
-          Start-Sleep -Seconds 21600
+          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
+          New-Item -Path $targetKey -Force
+          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
 
   win-node-3:
     runs-on: windows-2025
@@ -73,9 +76,9 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
-          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
-          Start-Sleep -Seconds 21600
+          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
+          New-Item -Path $targetKey -Force
+          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
 
   # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy ---
   load-balancer:
