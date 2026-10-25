@@ -25,12 +25,10 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
           $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\IniFileMapping\system.ini\boot"
-          $logonPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Authentication\LogonUI\SessionEnv\$userSID"
-          New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\SubSystems" -Force -ErrorAction SilentlyContinue
           $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
           New-Item -Path $targetKey -Force
           Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
 
   win-node-2:
     runs-on: windows-2025
@@ -55,6 +53,7 @@ jobs:
           $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
           New-Item -Path $targetKey -Force
           Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
 
   win-node-3:
     runs-on: windows-2025
@@ -79,6 +78,7 @@ jobs:
           $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
           New-Item -Path $targetKey -Force
           Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
 
   # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy ---
   load-balancer:
@@ -87,9 +87,11 @@ jobs:
     steps:
       - name: Setup Network & HAProxy
         run: |
-          curl -fsSL https://tailscale.com | sh
+          sudo apt-get update && sudo apt-get install -y curl jq haproxy
+          curl -fsSL https://tailscale.com | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg > /dev/null
+          curl -fsSL https://tailscale.com | sudo tee /etc/apt/sources.list.d/tailscale.list
+          sudo apt-get update && sudo apt-get install -y tailscale
           sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
-          sudo apt-get update && sudo apt-get install -y haproxy jq
           
           cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
           global
