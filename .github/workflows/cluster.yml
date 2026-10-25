@@ -3,6 +3,10 @@ name: Terminal Cluster (test)
 on:
   workflow_dispatch:
 
+env:
+  # Уникальные имена нод на каждый запуск: исключают конфликт со "старыми" нодами в tailnet
+  NODE_PREFIX: node-${{ github.run_id }}
+
 jobs:
   # --- ТЕРМИНАЛЬНЫЕ НОДЫ WINDOWS (3 штуки через matrix) ---
   win-node:
@@ -18,14 +22,13 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # --- Установка ПО: Tailscale + Notepad++ (вместо 1С) ---
+          # --- Установка ПО: Tailscale + Notepad++ ---
           choco install tailscale notepadplusplus -y
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
           $ts = "C:\Program Files\Tailscale\tailscale.exe"
           if (-not (Test-Path $ts)) { throw "Tailscale не установился" }
 
-          # Программа-оболочка: Notepad++, если не встал - обычный блокнот
           $app = "C:\Program Files\Notepad++\notepad++.exe"
           if (-not (Test-Path $app)) {
             Write-Warning "Notepad++ не найден, используем notepad.exe"
@@ -33,11 +36,7 @@ jobs:
           }
           Write-Host "Shell program: $app"
 
-          # --- Tailscale ---
-          & $ts up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-${{ matrix.node }} --unattended --accept-dns=false
-          if ($LASTEXITCODE -ne 0) { throw "tailscale up завершился с кодом $LASTEXITCODE" }
-
-          # --- RDP + NLA ---
+          # --- RDP + NLA (до подключения к tailnet, чтобы порт уже слушал) ---
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
           Set-Service TermService -StartupType Automatic
@@ -69,6 +68,22 @@ jobs:
           Set-ItemProperty -Path $ws -Name InitialProgram -Value "`"$app`""
           Set-ItemProperty -Path $ws -Name WorkDirectory -Value (Split-Path $app)
 
+          # --- Tailscale ---
+          $name = "$env:NODE_PREFIX-${{ matrix.node }}"
+          & $ts up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=$name --unattended --accept-dns=false
+          if ($LASTEXITCODE -ne 0) { throw "tailscale up завершился с кодом $LASTEXITCODE" }
+
+          # --- Самопроверка ---
+          Start-Sleep -Seconds 5
+          Write-Host "=== tailscale status ==="
+          & $ts status
+          $myip = (& $ts ip -4 | Select-Object -First 1)
+          Write-Host "Tailscale IP: $myip   Hostname: $name"
+          if (-not $myip) { throw "Нет Tailscale IP" }
+
+          $listen = Get-NetTCPConnection -LocalPort 3389 -State Listen -ErrorAction SilentlyContinue
+          if (-not $listen) { throw "RDP не слушает порт 3389" }
+          Write-Host "RDP слушает 3389: OK"
           Write-Host "Node ${{ matrix.node }} ready"
 
       - name: Keep node alive
@@ -84,26 +99,38 @@ jobs:
         uses: tailscale/github-action@v3
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
-          hostname: balancer
+          hostname: balancer-${{ github.run_id }}
 
       - name: Wait for Windows nodes
         run: |
-          set -e
+          get_ip() {
+            tailscale status --json | jq -r --arg h "$1" \
+              '[.Peer[]? | select((.HostName|ascii_downcase)==($h|ascii_downcase) and .Online==true)][0].TailscaleIPs[0] // empty'
+          }
+
           for i in 1 2 3; do
-            echo "Ждём win-node-$i в tailnet..."
-            for t in $(seq 1 40); do
-              ip=$(tailscale ip -4 win-node-$i 2>/dev/null || true)
-              if [ -n "$ip" ] && timeout 3 bash -c "</dev/tcp/$ip/3389" 2>/dev/null; then
-                echo "win-node-$i = $ip : 3389 OK"
+            name="${NODE_PREFIX}-$i"
+            echo "Ждём $name ..."
+            for t in $(seq 1 60); do
+              ip=$(get_ip "$name")
+              if [ -z "$ip" ]; then
+                state="нет в tailnet / offline"
+              elif timeout 3 bash -c "</dev/tcp/$ip/3389" 2>/dev/null; then
+                echo "$name = $ip : 3389 OK"
                 echo "NODE${i}_IP=$ip" >> "$GITHUB_ENV"
                 break
+              else
+                state="в tailnet ($ip), но порт 3389 закрыт"
               fi
-              sleep 10
-              if [ "$t" = "40" ]; then
-                echo "::error::win-node-$i не появился за 400 с"
+
+              echo "[$t/60] $name: $state"
+              if [ $((t % 6)) -eq 0 ]; then tailscale status; fi
+              if [ "$t" = "60" ]; then
+                echo "::error::$name не готов за 10 минут"
                 tailscale status
                 exit 1
               fi
+              sleep 10
             done
           done
 
