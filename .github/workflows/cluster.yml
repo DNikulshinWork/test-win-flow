@@ -124,15 +124,16 @@ jobs:
           EOF
           sudo systemctl restart haproxy
 
-      - name: Deploy Free FRP Tunnels
+      - name: Deploy Free FRP Tunnels via Docker
         run: |
-          # Используем бесплатные публичные сервера frp для генерации ссылок
-          curl -sSL https://github.com -o frp.tar.gz
-          tar -xzf frp.tar.gz
-          cd frp_0.54.0_linux_amd64
+          # Создаем динамические случайные порты для проброса
+          RDP_PORT=$((15000 + RANDOM % 20000))
+          STATS_PORT=$((36000 + RANDOM % 20000))
           
-          # Настраиваем подключение к бесплатному публичному шлюзу frp
-          cat <<EOF > frpc.toml
+          mkdir -p /home/runner/frp-config
+          
+          # Генерируем конфигурационный файл для frpc
+          cat <<EOF > /home/runner/frp-config/frpc.toml
           serverAddr = "v2.frp.one"
           serverPort = 7000
           
@@ -141,34 +142,34 @@ jobs:
           type = "tcp"
           localIp = "127.0.0.1"
           localPort = 3389
-          remotePort = $((10000 + RANDOM % 40000))
+          remotePort = $RDP_PORT
           
           [[proxies]]
           name = "stats-cluster-${{ github.run_id }}"
           type = "tcp"
           localIp = "127.0.0.1"
           localPort = 8404
-          remotePort = $((10000 + RANDOM % 40000))
+          remotePort = $STATS_PORT
           EOF
           
-          # Запускаем прокси клиент
-          ./frpc -c frpc.toml &
-          sleep 5
+          # Запускаем официальный стабильный Docker-контейнер frpc в сети хоста
+          docker run -d --name frp-client \
+            --net=host \
+            -v /home/runner/frp-config:/etc/frp \
+            fatedier/frpc:latest -c /etc/frp/frpc.toml
           
-          # Вытаскиваем сгенерированные порты
-          RDP_PORT=\$(grep -oP 'remotePort = \K\d+' frpc.toml)
-          STATS_PORT=\$(grep -oP 'remotePort = \K\d+' frpc.toml | tail -n 1)
+          sleep 5
           
           echo "=========================================================="
           echo "ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ С ТЕЛЕФОНА (БЕСПЛАТНО):"
           echo "----------------------------------------------------------"
           echo "ДЛЯ ПОДКЛЮЧЕНИЯ В ПРИЛОЖЕНИИ aRDP:"
           echo "Host: v2.frp.one"
-          echo "Port: \$RDP_PORT"
+          echo "Port: $RDP_PORT"
           echo "Пользователь/Пароль/Домен: test / test / test"
           echo "----------------------------------------------------------"
           echo "ДЛЯ ОТСЛЕЖИВАНИЯ БАЛАНСИРОВКИ В БРАУЗЕРЕ:"
-          echo "Адрес: http://frp.one:\$STATS_PORT"
+          echo "Адрес: http://frp.one:$STATS_PORT"
           echo "Логин/Пароль: admin / adminpass"
           echo "=========================================================="
           sleep 21600
