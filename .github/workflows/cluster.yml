@@ -1,0 +1,164 @@
+name: 1C Terminal Cluster
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # --- ТЕРМИНАЛЬНЫЕ НОДЫ WINDOWS SERVER ---
+  win-node-1:
+    runs-on: windows-2025
+    steps:
+      - name: Network & Server Setup
+        shell: powershell
+        run: |
+          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
+          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-1
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          secedit /export /cfg cfg.txt
+          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
+          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
+          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
+          New-LocalUser "test" -Password $Password
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
+      - name: Install 1C Client Shell
+        shell: powershell
+        run: |
+          $url = "https://1c.ru"
+          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
+          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
+          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
+          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
+          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
+
+  win-node-2:
+    runs-on: windows-2025
+    steps:
+      - name: Network & Server Setup
+        shell: powershell
+        run: |
+          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
+          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-2
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          secedit /export /cfg cfg.txt
+          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
+          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
+          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
+          New-LocalUser "test" -Password $Password
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
+      - name: Install 1C Client Shell
+        shell: powershell
+        run: |
+          $url = "https://1c.ru"
+          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
+          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
+          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
+          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
+          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
+
+  win-node-3:
+    runs-on: windows-2025
+    steps:
+      - name: Network & Server Setup
+        shell: powershell
+        run: |
+          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
+          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-3
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          secedit /export /cfg cfg.txt
+          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
+          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
+          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
+          New-LocalUser "test" -Password $Password
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
+      - name: Install 1C Client Shell
+        shell: powershell
+        run: |
+          $url = "https://1c.ru"
+          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
+          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
+          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
+          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
+          New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
+          Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
+          Start-Sleep -Seconds 21600
+
+  # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy ---
+  load-balancer:
+    runs-on: ubuntu-latest
+    needs: [win-node-1, win-node-2, win-node-3]
+    steps:
+      - name: Setup Network & HAProxy
+        run: |
+          curl -fsSL https://tailscale.com | sh
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
+          sudo apt-get update && sudo apt-get install -y haproxy jq
+          
+          cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
+          global
+                  log /dev/log local0
+          defaults
+                  log     global
+                  mode    tcp
+                  timeout connect 5s
+                  timeout client  50s
+                  timeout server  50s
+          listen stats
+                  mode http
+                  bind *:8404
+                  stats enable
+                  stats uri /
+                  stats refresh 2s
+                  stats auth admin:adminpass
+          frontend rdp_front
+                  bind *:3389
+                  default_backend rdp_back
+          backend rdp_back
+                  mode tcp
+                  balance roundrobin
+                  server win1 win-node-1:3389 check inter 2s
+                  server win2 win-node-2:3389 check inter 2s
+                  server win3 win-node-3:3389 check inter 2s
+          EOF
+          sudo systemctl restart haproxy
+
+      - name: Start ngrok Tunnel
+        run: |
+          curl -s https://amazonaws.com | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt-get update && sudo apt-get install ngrok
+          
+          cat <<EOF > ngrok.yml
+          version: "2"
+          authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
+          tunnels:
+            rdp:
+              proto: tcp
+              addr: 3389
+            stats:
+              proto: http
+              addr: 8404
+          EOF
+          
+          ngrok start --all --config ngrok.yml --log=stdout > /dev/null &
+          sleep 5
+          echo "=========================================================="
+          echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
+          echo "----------------------------------------------------------"
+          echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
+          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
+          echo "=========================================================="
+          sleep 21600
