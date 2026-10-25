@@ -8,11 +8,12 @@ jobs:
   win-node-1:
     runs-on: windows-2025
     steps:
-      - name: Network & Server Setup
+      - name: Setup Node 1
         shell: powershell
         run: |
-          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
-          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-1
+          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
+          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-1
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -22,14 +23,8 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-      - name: Install 1C Client Shell
-        shell: powershell
-        run: |
-          $url = "https://1c.ru"
-          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
-          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
-          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
-          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          choco install 1c-enterprise-thin-client -y
+          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
           Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
@@ -38,11 +33,12 @@ jobs:
   win-node-2:
     runs-on: windows-2025
     steps:
-      - name: Network & Server Setup
+      - name: Setup Node 2
         shell: powershell
         run: |
-          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
-          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-2
+          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
+          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-2
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -52,14 +48,8 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-      - name: Install 1C Client Shell
-        shell: powershell
-        run: |
-          $url = "https://1c.ru"
-          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
-          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
-          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
-          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          choco install 1c-enterprise-thin-client -y
+          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
           Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
@@ -68,11 +58,12 @@ jobs:
   win-node-3:
     runs-on: windows-2025
     steps:
-      - name: Network & Server Setup
+      - name: Setup Node 3
         shell: powershell
         run: |
-          iex ((New-Object System.Net.WebClient).DownloadString('https://tailscale.com'))
-          tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-3
+          Invoke-WebRequest -Uri "https://tailscale.com" -OutFile "ts.msi"
+          Start-Process msiexec.exe -ArgumentList "/i ts.msi /qn /norestart" -Wait
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-3
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -82,14 +73,8 @@ jobs:
           $Password = ConvertTo-SecureString "test" -AsPlainText -Force
           New-LocalUser "test" -Password $Password
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-      - name: Install 1C Client Shell
-        shell: powershell
-        run: |
-          $url = "https://1c.ru"
-          Invoke-WebRequest -Uri $url -OutFile "1c.zip"
-          Expand-Archive "1c.zip" -DestinationPath "1c_ext"
-          Start-Process -FilePath "1c_ext\1CEnterprise8-client.msi" -ArgumentList "/qn /norestart" -Wait
-          $1cPath = "C:\Program Files\1cv8\8.3.25.1394\bin\1cv8c.exe"
+          choco install 1c-enterprise-thin-client -y
+          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
           $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
           New-Item -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Force
           Set-ItemProperty -Path "Registry::HKEY_USERS\$userSID\Software\Microsoft\Windows NT\CurrentVersion\Winlogon" -Name "Shell" -Value $1cPath
