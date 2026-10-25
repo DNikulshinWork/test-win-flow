@@ -93,8 +93,6 @@ jobs:
       - name: Setup Network & HAProxy
         run: |
           sudo apt-get update && sudo apt-get install -y curl jq haproxy
-          
-          # Установка Tailscale через встроенный менеджер snap (без curl сайтов)
           sudo snap install tailscale
           sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
           
@@ -126,11 +124,12 @@ jobs:
           EOF
           sudo systemctl restart haproxy
 
-      - name: Start ngrok Tunnel
+      - name: Download & Start ngrok Binary Directly
         run: |
-          curl -s https://amazonaws.com | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt-get update && sudo apt-get install ngrok
+          # Скачиваем стабильный чистый архив бинарника для Linux x86_64
+          curl -sSL https://equinox.io -o ngrok.tgz
+          tar -xzf ngrok.tgz
+          sudo mv ngrok /usr/local/bin/
           
           cat <<EOF > ngrok.yml
           version: "2"
@@ -145,7 +144,8 @@ jobs:
           EOF
           
           ngrok start --all --config ngrok.yml --log=stdout > /dev/null &
-          sleep 5
+          sleep 7
+          
           echo "=========================================================="
           echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
           curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
