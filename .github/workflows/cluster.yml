@@ -86,34 +86,27 @@ jobs:
         shell: powershell
         run: Start-Sleep -Seconds 21600
 
-  # --- БАЛАНСИРОВЩИК НА НАТИВНОМ СЕТЕВОМ СТЕКЕ ---
+  # --- БАЛАНСИРОВЩИК НА КОРРЕКТНОЙ СЕТЕВОЙ МОДЕЛИ DOCKER ---
   load-balancer:
     runs-on: ubuntu-latest
     steps:
-      - name: Нативная сборка HAProxy и Tailscale
+      - name: Run Integrated Cluster Network
         run: |
-          sudo apt-get update && sudo apt-get install -y curl jq haproxy iptables
+          # 1. Запускаем базовый сетевой шлюз Tailscale
+          docker run -d --name ts-balancer \
+            --device=/dev/net/tun:/dev/net/tun \
+            --cap-add=NET_ADMIN \
+            tailscale/tailscale:latest \
+            tailscaled --tun=userspace-networking
           
-          # Скачиваем нативный статически скомпилированный бинарник Tailscale (минуя apt и snap репозитории)
-          curl -sSL https://tailscale.com -o tailscale.tgz
-          tar -xzf tailscale.tgz
-          cd tailscale_1.76.0_amd64
-          
-          # Запускаем системную службу демона во внутреннем пространстве пользователя хоста
-          sudo ./tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055 &
           sleep 5
-          sudo ./tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
+          docker exec ts-balancer tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
           
-          # Определяем приватные IP адреса Windows-нод в сети Tailscale напрямую
-          # Это решает проблему DNS-резолва имен машин внутри HAProxy
-          WIN1_IP=$(sudo ./tailscale ip -4 win-node-1)
-          WIN2_IP=$(sudo ./tailscale ip -4 win-node-2)
-          WIN3_IP=$(sudo ./tailscale ip -4 win-node-3)
-          
-          # Создаем чистую нативную конфигурацию HAProxy
-          cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
+          # 2. Создаем конфигурацию HAProxy (Используем DNS-имена Tailscale, так как контейнеры находятся внутри VPN)
+          mkdir -p /home/runner/haproxy-config
+          cat <<EOF > /home/runner/haproxy-config/haproxy.cfg
           global
-                  log /dev/log local0
+                  log stdout format raw local0
           defaults
                   log     global
                   mode    tcp
@@ -122,28 +115,31 @@ jobs:
                   timeout server  50s
           listen stats
                   mode http
-                  bind *:8404
+                  bind 0.0.0.0:8404
                   stats enable
                   stats uri /
                   stats refresh 2s
                   stats auth admin:adminpass
           frontend rdp_front
-                  bind *:3389
+                  bind 0.0.0.0:3389
                   default_backend rdp_back
           backend rdp_back
                   mode tcp
                   balance roundrobin
-                  server win1 ${WIN1_IP}:3389 check inter 2s
-                  server win2 ${WIN2_IP}:3389 check inter 2s
-                  server win3 ${WIN3_IP}:3389 check inter 2s
+                  server win1 win-node-1:3389 check inter 2s
+                  server win2 win-node-2:3389 check inter 2s
+                  server win3 win-node-3:3389 check inter 2s
           EOF
-          sudo systemctl restart haproxy
 
-      - name: Deploy Free FRP Tunnels via Docker
-        run: |
+          # Запускаем балансировщик HAProxy СТРОГО внутри сети контейнера Tailscale
+          docker run -d --name haproxy-balancer \
+            --net=container:ts-balancer \
+            -v /home/runner/haproxy-config:/usr/local/etc/haproxy:ro \
+            haproxy:latest
+
+          # 3. Подготовка и запуск туннелей FRP прямо внутри той же сети Tailscale
           RDP_PORT=$((15000 + RANDOM % 20000))
           STATS_PORT=$((36000 + RANDOM % 20000))
-          
           mkdir -p /home/runner/frp-config
           
           cat <<EOF > /home/runner/frp-config/frpc.toml
@@ -165,8 +161,9 @@ jobs:
           remotePort = $STATS_PORT
           EOF
           
+          # Запускаем FRP-клиент СТРОГО в сети контейнера Tailscale
           docker run -d --name frp-client \
-            --net=host \
+            --net=container:ts-balancer \
             -v /home/runner/frp-config:/etc/frp \
             fatedier/frpc:v0.54.0 -c /etc/frp/frpc.toml
           
