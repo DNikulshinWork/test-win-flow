@@ -207,11 +207,30 @@ jobs:
             exit 1
           fi
 
+          # IPv4-адрес туннеля: обходит клиентские прокси/сети без IPv6 (ошибка "Network is unreachable")
+          RDP_HOST="${RDP_ADDR%%:*}"
+          RDP_PORT_PUB="${RDP_ADDR##*:}"
+          RDP_IPV4=$(getent ahostsv4 "$RDP_HOST" | awk '{print $1; exit}')
+          [ -z "$RDP_IPV4" ] && RDP_IPV4="$RDP_HOST"
+
+          # Самопроверка с самого runner'а через публичный адрес (сеть телефона тут ни при чём)
+          if timeout 8 bash -c "</dev/tcp/${RDP_IPV4}/${RDP_PORT_PUB}" 2>/dev/null; then
+            echo "SELF-CHECK RDP через публичный адрес: OK"
+          else
+            echo "SELF-CHECK RDP через публичный адрес: FAIL"
+          fi
+          if [ -n "$STATS_ADDR" ]; then
+            code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' -u admin:adminpass "http://${RDP_IPV4}:${STATS_ADDR##*:}/" || true)
+            echo "SELF-CHECK Stats через публичный адрес: HTTP $code (ожидается 200)"
+          fi
+
           echo "=========================================================="
-          echo "aRDP:   Host ${RDP_ADDR%%:*}   Port ${RDP_ADDR##*:}"
+          echo "aRDP (используй IPv4, надёжнее):"
+          echo "        Host ${RDP_IPV4}   Port ${RDP_PORT_PUB}"
+          echo "        (или имя: ${RDP_HOST})"
           echo "        user: test   password: test   домен: ПУСТО"
           if [ -n "$STATS_ADDR" ]; then
-            echo "Stats:  http://$STATS_ADDR  (admin / adminpass)"
+            echo "Stats:  http://${RDP_IPV4}:${STATS_ADDR##*:}  (admin / adminpass)"
           fi
           echo "=========================================================="
 
