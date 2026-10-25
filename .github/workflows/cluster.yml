@@ -133,15 +133,14 @@ jobs:
           tunnels:
             rdp:
               proto: tcp
-              addr: host.docker.internal:3389
+              addr: 127.0.0.1:3389
             stats:
               proto: http
-              addr: host.docker.internal:8404
+              addr: 127.0.0.1:8404
           EOF
           
           docker run -d --name ngrok-agent \
-            -p 4040:4040 \
-            --add-host=host.docker.internal:host-gateway \
+            --net=host \
             -v /home/runner/ngrok-config:/etc/ngrok \
             ngrok/ngrok:latest start --all --config /etc/ngrok/ngrok.yml
           
@@ -149,9 +148,9 @@ jobs:
           
           echo "=========================================================="
           echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
+          curl -s http://127.0.0 | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
           echo "----------------------------------------------------------"
           echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
-          curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
+          curl -s http://127.0.0 | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
           echo "=========================================================="
           sleep 21600
