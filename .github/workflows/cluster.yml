@@ -92,8 +92,12 @@ jobs:
     steps:
       - name: Setup Network & HAProxy
         run: |
-          sudo apt-get update && sudo apt-get install -y curl jq haproxy
-          sudo snap install tailscale
+          sudo apt-get update && sudo apt-get install -y curl jq haproxy iptables
+          
+          # Нативная установка Tailscale без использования изоляции snap/apparmor
+          curl -fsSL https://tailscale.com | sh
+          sudo tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055 &
+          sleep 5
           sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
           
           cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
@@ -150,7 +154,6 @@ jobs:
           remotePort = $STATS_PORT
           EOF
           
-          # Явно зафиксированная существующая версия контейнера v0.54.0
           docker run -d --name frp-client \
             --net=host \
             -v /home/runner/frp-config:/etc/frp \
