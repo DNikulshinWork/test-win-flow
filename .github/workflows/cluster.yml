@@ -86,23 +86,30 @@ jobs:
         shell: powershell
         run: Start-Sleep -Seconds 21600
 
-  # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy + FRP ---
+  # --- ПОЛНОСТЬЮ DOCKER-БАЛАНСИРОВЩИК КЛАСТЕРА ---
   load-balancer:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Network & HAProxy
+      - name: Deploy Cluster Core via Docker
         run: |
-          sudo apt-get update && sudo apt-get install -y curl jq haproxy iptables
+          # 1. Запуск Tailscale в контейнере с правами доступа к TUN-интерфейсу хоста
+          docker run -d --name ts-balancer \
+            --restart=unless-stopped \
+            --device=/dev/net/tun:/dev/net/tun \
+            --net=host \
+            --cap-add=NET_ADMIN \
+            tailscale/tailscale:latest \
+            tailscaled --tun=userspace-networking
           
-          # Нативная установка Tailscale без использования изоляции snap/apparmor
-          curl -fsSL https://tailscale.com | sh
-          sudo tailscaled --tun=userspace-networking --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055 &
-          sleep 5
-          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
-          
-          cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
+          sleep 3
+          # Авторизация в приватной сети
+          docker exec ts-balancer tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
+
+          # 2. Подготовка конфигурации балансировщика HAProxy
+          mkdir -p /home/runner/haproxy-config
+          cat <<EOF > /home/runner/haproxy-config/haproxy.cfg
           global
-                  log /dev/log local0
+                  log stdout format raw local0
           defaults
                   log     global
                   mode    tcp
@@ -126,13 +133,16 @@ jobs:
                   server win2 win-node-2:3389 check inter 2s
                   server win3 win-node-3:3389 check inter 2s
           EOF
-          sudo systemctl restart haproxy
 
-      - name: Deploy Free FRP Tunnels via Docker
-        run: |
+          # Запуск балансировщика в Docker на хост-интерфейсе
+          docker run -d --name haproxy-balancer \
+            --net=host \
+            -v /home/runner/haproxy-config:/usr/local/etc/haproxy:ro \
+            haproxy:latest
+
+          # 3. Подготовка и запуск туннелей FRP (Бесплатный проброс TCP портов)
           RDP_PORT=$((15000 + RANDOM % 20000))
           STATS_PORT=$((36000 + RANDOM % 20000))
-          
           mkdir -p /home/runner/frp-config
           
           cat <<EOF > /home/runner/frp-config/frpc.toml
