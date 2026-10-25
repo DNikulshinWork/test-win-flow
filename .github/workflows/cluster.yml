@@ -86,7 +86,7 @@ jobs:
         shell: powershell
         run: Start-Sleep -Seconds 21600
 
-  # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy ---
+  # --- БАЛАНСИРОВЩИК НАГРУЗКИ HAProxy + FRP ---
   load-balancer:
     runs-on: ubuntu-latest
     steps:
@@ -124,27 +124,51 @@ jobs:
           EOF
           sudo systemctl restart haproxy
 
-      - name: Start Localtonet Tunnels
+      - name: Deploy Free FRP Tunnels
         run: |
-          # Скачиваем и распаковываем клиент туннелирования Localtonet
-          curl -sSL https://localtonet.com -o l2n.zip
-          sudo apt-get install -y unzip
-          unzip l2n.zip
-          chmod +x localtonet
+          # Используем бесплатные публичные сервера frp для генерации ссылок
+          curl -sSL https://github.com -o frp.tar.gz
+          tar -xzf frp.tar.gz
+          cd frp_0.54.0_linux_amd64
           
-          # Запускаем клиент в фоновом режиме с вашим токеном
-          ./localtonet --token ${{ secrets.LOCALTONET_AUTH_TOKEN }} > /dev/null &
+          # Настраиваем подключение к бесплатному публичному шлюзу frp
+          cat <<EOF > frpc.toml
+          serverAddr = "v2.frp.one"
+          serverPort = 7000
+          
+          [[proxies]]
+          name = "rdp-cluster-${{ github.run_id }}"
+          type = "tcp"
+          localIp = "127.0.0.1"
+          localPort = 3389
+          remotePort = $((10000 + RANDOM % 40000))
+          
+          [[proxies]]
+          name = "stats-cluster-${{ github.run_id }}"
+          type = "tcp"
+          localIp = "127.0.0.1"
+          localPort = 8404
+          remotePort = $((10000 + RANDOM % 40000))
+          EOF
+          
+          # Запускаем прокси клиент
+          ./frpc -c frpc.toml &
           sleep 5
           
-          # Автоматически создаем TCP туннель для RDP (порт 3389) и HTTP для панели HAProxy (порт 8404) через их API
-          curl -s -X POST "https://localtonet.com" -H "Content-Type: application/json" -d '{"Token":"'"${{ secrets.LOCALTONET_AUTH_TOKEN }}"'","Type":"tcp","LocalIp":"127.0.0.1","LocalPort":3389}' > rdp_res.txt
-          curl -s -X POST "https://localtonet.com" -H "Content-Type: application/json" -d '{"Token":"'"${{ secrets.LOCALTONET_AUTH_TOKEN }}"'","Type":"http","LocalIp":"127.0.0.1","LocalPort":8404}' > stats_res.txt
+          # Вытаскиваем сгенерированные порты
+          RDP_PORT=\$(grep -oP 'remotePort = \K\d+' frpc.toml)
+          STATS_PORT=\$(grep -oP 'remotePort = \K\d+' frpc.toml | tail -n 1)
           
           echo "=========================================================="
-          echo "ДАННЫЕ ДЛЯ aRDP И БРАУЗЕРА:"
-          echo "Зайдите в вашу панель управления https://localtonet.com"
-          echo "Там во вкладке 'Tunnels' мгновенно отобразятся два адреса:"
-          echo "1. TCP-адрес (для aRDP) вида: '://localtonet.com:XXXXX'"
-          echo "2. HTTP-адрес (для панели статистики HAProxy)"
+          echo "ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ С ТЕЛЕФОНА (БЕСПЛАТНО):"
+          echo "----------------------------------------------------------"
+          echo "ДЛЯ ПОДКЛЮЧЕНИЯ В ПРИЛОЖЕНИИ aRDP:"
+          echo "Host: v2.frp.one"
+          echo "Port: \$RDP_PORT"
+          echo "Пользователь/Пароль/Домен: test / test / test"
+          echo "----------------------------------------------------------"
+          echo "ДЛЯ ОТСЛЕЖИВАНИЯ БАЛАНСИРОВКИ В БРАУЗЕРЕ:"
+          echo "Адрес: http://frp.one:\$STATS_PORT"
+          echo "Логин/Пароль: admin / adminpass"
           echo "=========================================================="
           sleep 21600
