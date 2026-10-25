@@ -4,181 +4,176 @@ on:
   workflow_dispatch:
 
 jobs:
-  # --- ТЕРМИНАЛЬНЫЕ НОДЫ WINDOWS SERVER ---
-  win-node-1:
+  # --- ТЕРМИНАЛЬНЫЕ НОДЫ WINDOWS (3 штуки через matrix) ---
+  win-node:
     runs-on: windows-2025
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [1, 2, 3]
     steps:
-      - name: Setup Node 1
+      - name: Setup node ${{ matrix.node }}
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
+
+          # --- Установка ПО ---
           choco install tailscale 1c-enterprise-thin-client -y
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-1
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          secedit /export /cfg cfg.txt
-          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
-          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
-          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
-          New-LocalUser "test" -Password $Password
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
-          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
-          New-Item -Path $targetKey -Force
-          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
-      - name: Keep Node Alive
-        shell: powershell
-        run: Start-Sleep -Seconds 21600
 
-  win-node-2:
-    runs-on: windows-2025
-    steps:
-      - name: Setup Node 2
-        shell: powershell
-        run: |
-          choco install tailscale 1c-enterprise-thin-client -y
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-2
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          secedit /export /cfg cfg.txt
-          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
-          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
-          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
-          New-LocalUser "test" -Password $Password
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
-          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
-          New-Item -Path $targetKey -Force
-          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
-      - name: Keep Node Alive
-        shell: powershell
-        run: Start-Sleep -Seconds 21600
+          # Ищем реальный путь тонкого клиента (не гадаем)
+          $1c = Get-ChildItem "C:\Program Files*\1cv8" -Recurse -Filter 1cv8c.exe -ErrorAction SilentlyContinue |
+                Select-Object -First 1 -ExpandProperty FullName
+          if (-not $1c) { throw "1cv8c.exe не найден: проверь пакет 1c-enterprise-thin-client" }
+          Write-Host "1C thin client: $1c"
 
-  win-node-3:
-    runs-on: windows-2025
-    steps:
-      - name: Setup Node 3
-        shell: powershell
-        run: |
-          choco install tailscale 1c-enterprise-thin-client -y
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-3
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          secedit /export /cfg cfg.txt
-          (Get-Content cfg.txt) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' -replace 'MinPasswordLength = .*', 'MinPasswordLength = 4' | Set-Content cfg.txt
-          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
-          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
-          New-LocalUser "test" -Password $Password
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
-          $1cPath = "C:\Program Files\1cv8\common\1cv8c.exe"
-          $userSID = (New-Object System.Security.Principal.NTAccount("test")).Translate([System.Security.Principal.SecurityIdentifier]).Value
-          $targetKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\UserApps\$userSID"
-          New-Item -Path $targetKey -Force
-          Set-ItemProperty -Path $targetKey -Name "Shell" -Value $1cPath
-      - name: Keep Node Alive
-        shell: powershell
-        run: Start-Sleep -Seconds 21600
+          # --- Tailscale ---
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-${{ matrix.node }} --unattended --accept-dns=false
 
-  # --- БАЛАНСИРОВЩИК НА КОРРЕКТНОЙ СЕТЕВОЙ МОДЕЛИ DOCKER ---
+          # --- RDP + NLA ---
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name UserAuthentication -Value 1
+          Set-Service TermService -StartupType Automatic
+          Start-Service TermService
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          New-NetFirewallRule -DisplayName "RDP-3389-Any" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow -Profile Any | Out-Null
+
+          # --- Политика паролей (пароль "test") ---
+          secedit /export /cfg cfg.txt
+          (Get-Content cfg.txt) `
+            -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' `
+            -replace 'MinimumPasswordLength = \d+', 'MinimumPasswordLength = 0' |
+            Set-Content cfg.txt -Encoding Unicode
+          secedit /configure /db cfg.sdb /cfg cfg.txt /areas SECURITYPOLICY
+
+          # --- Пользователь ---
+          $Password = ConvertTo-SecureString "test" -AsPlainText -Force
+          New-LocalUser "test" -Password $Password -PasswordNeverExpires
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
+
+          # --- Вместо рабочего стола: запуск 1С при подключении (закрыл 1С -> сессия завершена) ---
+          $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
+          New-Item -Path $pol -Force | Out-Null
+          Set-ItemProperty -Path $pol -Name InitialProgram -Value "`"$1c`""
+          Set-ItemProperty -Path $pol -Name WorkDirectory  -Value (Split-Path $1c)
+
+          $ws = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+          Set-ItemProperty -Path $ws -Name fInheritInitialProgram -Value 0
+          Set-ItemProperty -Path $ws -Name InitialProgram -Value "`"$1c`""
+          Set-ItemProperty -Path $ws -Name WorkDirectory -Value (Split-Path $1c)
+
+          Write-Host "Node ${{ matrix.node }} ready"
+
+      - name: Keep node alive
+        shell: powershell
+        run: Start-Sleep -Seconds 21000
+
+  # --- БАЛАНСИРОВЩИК: Tailscale на хосте + HAProxy и FRP в host-network ---
   load-balancer:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
-      - name: Run Integrated Cluster Network
+      - name: Tailscale (нативный TUN)
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          hostname: balancer
+
+      - name: Wait for Windows nodes
         run: |
-          # 1. Запускаем базовый сетевой шлюз Tailscale
-          docker run -d --name ts-balancer \
-            --device=/dev/net/tun:/dev/net/tun \
-            --cap-add=NET_ADMIN \
-            tailscale/tailscale:latest \
-            tailscaled --tun=userspace-networking
-          
-          sleep 5
-          docker exec ts-balancer tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=balancer
-          
-          # 2. Создаем конфигурацию HAProxy (Используем DNS-имена Tailscale, так как контейнеры находятся внутри VPN)
-          mkdir -p /home/runner/haproxy-config
-          cat <<EOF > /home/runner/haproxy-config/haproxy.cfg
+          set -e
+          for i in 1 2 3; do
+            echo "Ждём win-node-$i в tailnet..."
+            for t in $(seq 1 90); do
+              ip=$(tailscale ip -4 win-node-$i 2>/dev/null || true)
+              if [ -n "$ip" ] && timeout 3 bash -c "</dev/tcp/$ip/3389" 2>/dev/null; then
+                echo "win-node-$i = $ip : 3389 OK"
+                echo "NODE${i}_IP=$ip" >> "$GITHUB_ENV"
+                break
+              fi
+              sleep 10
+              if [ "$t" = "90" ]; then echo "win-node-$i не появился"; tailscale status; exit 1; fi
+            done
+          done
+
+      - name: HAProxy
+        run: |
+          mkdir -p "$HOME/haproxy"
+          cat <<EOF > "$HOME/haproxy/haproxy.cfg"
           global
-                  log stdout format raw local0
+              log stdout format raw local0
           defaults
-                  log     global
-                  mode    tcp
-                  timeout connect 5s
-                  timeout client  50s
-                  timeout server  50s
+              log     global
+              mode    tcp
+              timeout connect 5s
+              timeout client  1h
+              timeout server  1h
           listen stats
-                  mode http
-                  bind 0.0.0.0:8404
-                  stats enable
-                  stats uri /
-                  stats refresh 2s
-                  stats auth admin:adminpass
+              mode http
+              bind 0.0.0.0:8404
+              timeout client 50s
+              timeout server 50s
+              stats enable
+              stats uri /
+              stats refresh 2s
+              stats auth admin:adminpass
           frontend rdp_front
-                  bind 0.0.0.0:3389
-                  default_backend rdp_back
+              bind 0.0.0.0:3389
+              default_backend rdp_back
           backend rdp_back
-                  mode tcp
-                  balance roundrobin
-                  server win1 win-node-1:3389 check inter 2s
-                  server win2 win-node-2:3389 check inter 2s
-                  server win3 win-node-3:3389 check inter 2s
+              balance roundrobin
+              server win1 ${NODE1_IP}:3389 check inter 2s
+              server win2 ${NODE2_IP}:3389 check inter 2s
+              server win3 ${NODE3_IP}:3389 check inter 2s
           EOF
 
-          # Запускаем балансировщик HAProxy СТРОГО внутри сети контейнера Tailscale
-          docker run -d --name haproxy-balancer \
-            --net=container:ts-balancer \
-            -v /home/runner/haproxy-config:/usr/local/etc/haproxy:ro \
-            haproxy:latest
+          docker run --rm --entrypoint haproxy -v "$HOME/haproxy:/cfg:ro" haproxy:lts -c -f /cfg/haproxy.cfg
+          docker run -d --name haproxy --network host \
+            -v "$HOME/haproxy:/usr/local/etc/haproxy:ro" haproxy:lts
+          sleep 3
+          docker logs haproxy
+          curl -sf -u admin:adminpass http://127.0.0.1:8404/ >/dev/null && echo "HAProxy stats OK"
 
-          # 3. Подготовка и запуск туннелей FRP прямо внутри той же сети Tailscale
+      - name: FRP tunnel
+        run: |
           RDP_PORT=$((15000 + RANDOM % 20000))
           STATS_PORT=$((36000 + RANDOM % 20000))
-          mkdir -p /home/runner/frp-config
-          
-          cat <<EOF > /home/runner/frp-config/frpc.toml
+          mkdir -p "$HOME/frp"
+          cat <<EOF > "$HOME/frp/frpc.toml"
           serverAddr = "v2.frp.one"
           serverPort = 7000
-          
+
           [[proxies]]
-          name = "rdp-cluster-${{ github.run_id }}"
+          name = "rdp-${{ github.run_id }}"
           type = "tcp"
-          localIp = "127.0.0.1"
+          localIP = "127.0.0.1"
           localPort = 3389
-          remotePort = $RDP_PORT
-          
+          remotePort = ${RDP_PORT}
+
           [[proxies]]
-          name = "stats-cluster-${{ github.run_id }}"
+          name = "stats-${{ github.run_id }}"
           type = "tcp"
-          localIp = "127.0.0.1"
+          localIP = "127.0.0.1"
           localPort = 8404
-          remotePort = $STATS_PORT
+          remotePort = ${STATS_PORT}
           EOF
-          
-          # Запускаем FRP-клиент СТРОГО в сети контейнера Tailscale
-          docker run -d --name frp-client \
-            --net=container:ts-balancer \
-            -v /home/runner/frp-config:/etc/frp \
-            fatedier/frpc:v0.54.0 -c /etc/frp/frpc.toml
-          
-          sleep 5
-          
+
+          docker run -d --name frpc --network host \
+            -v "$HOME/frp:/etc/frp:ro" fatedier/frpc:v0.54.0 -c /etc/frp/frpc.toml
+          sleep 8
+          docker logs frpc
+
+          if ! docker logs frpc 2>&1 | grep -q "start proxy success"; then
+            echo "::error::FRP-прокси не поднялись (порт запрещён сервером или сервер недоступен), см. лог выше"
+            exit 1
+          fi
+
           echo "=========================================================="
-          echo "ДАННЫЕ ДЛЯ ПОДКЛЮЧЕНИЯ С ТЕЛЕФОНА (БЕСПЛАТНО):"
-          echo "----------------------------------------------------------"
-          echo "ДЛЯ ПОДКЛЮЧЕНИЯ В ПРИЛОЖЕНИИ aRDP:"
-          echo "Host: v2.frp.one"
-          echo "Port: $RDP_PORT"
-          echo "Пользователь/Пароль/Домен: test / test / test"
-          echo "----------------------------------------------------------"
-          echo "ДЛЯ ОТСЛЕЖИВАНИЯ БАЛАНСИРОВКИ В БРАУЗЕРЕ:"
-          echo "Адрес: http://frp.one:$STATS_PORT"
-          echo "Логин/Пароль: admin / adminpass"
+          echo "aRDP:   Host v2.frp.one   Port $RDP_PORT"
+          echo "        user: test   password: test   домен: ПУСТО"
+          echo "Stats:  http://v2.frp.one:$STATS_PORT  (admin / adminpass)"
           echo "=========================================================="
-          sleep 21600
+
+      - name: Keep alive
+        run: sleep 21000
