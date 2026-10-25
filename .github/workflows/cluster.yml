@@ -144,13 +144,13 @@ jobs:
             -v /home/runner/ngrok-config:/etc/ngrok \
             ngrok/ngrok:latest start --all --config /etc/ngrok/ngrok.yml
           
-          sleep 10
+          sleep 12
           
           echo "=========================================================="
           echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
-          curl -s http://127.0.0 | jq -r '.tunnels[] | select(.name=="rdp") | .public_url'
+          docker logs ngrok-agent 2>&1 | grep -o 'tcp://[^ ]*' || echo "Туннель TCP еще поднимается, обновите лог через пару секунд"
           echo "----------------------------------------------------------"
           echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
-          curl -s http://127.0.0 | jq -r '.tunnels[] | select(.name=="stats") | .public_url'
+          docker logs ngrok-agent 2>&1 | grep -o 'https://[^ ]*' || echo "Туннель HTTP еще поднимается, обновите лог через пару секунд"
           echo "=========================================================="
           sleep 21600
