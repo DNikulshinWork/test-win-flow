@@ -1,4 +1,4 @@
-name: 1C Terminal Cluster
+name: Terminal Cluster (test)
 
 on:
   workflow_dispatch:
@@ -18,18 +18,24 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # --- Установка ПО ---
-          choco install tailscale 1c-enterprise-thin-client -y
+          # --- Установка ПО: Tailscale + Notepad++ (вместо 1С) ---
+          choco install tailscale notepadplusplus -y
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-          # Ищем реальный путь тонкого клиента (не гадаем)
-          $1c = Get-ChildItem "C:\Program Files*\1cv8" -Recurse -Filter 1cv8c.exe -ErrorAction SilentlyContinue |
-                Select-Object -First 1 -ExpandProperty FullName
-          if (-not $1c) { throw "1cv8c.exe не найден: проверь пакет 1c-enterprise-thin-client" }
-          Write-Host "1C thin client: $1c"
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          if (-not (Test-Path $ts)) { throw "Tailscale не установился" }
+
+          # Программа-оболочка: Notepad++, если не встал - обычный блокнот
+          $app = "C:\Program Files\Notepad++\notepad++.exe"
+          if (-not (Test-Path $app)) {
+            Write-Warning "Notepad++ не найден, используем notepad.exe"
+            $app = "C:\Windows\System32\notepad.exe"
+          }
+          Write-Host "Shell program: $app"
 
           # --- Tailscale ---
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-${{ matrix.node }} --unattended --accept-dns=false
+          & $ts up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=win-node-${{ matrix.node }} --unattended --accept-dns=false
+          if ($LASTEXITCODE -ne 0) { throw "tailscale up завершился с кодом $LASTEXITCODE" }
 
           # --- RDP + NLA ---
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
@@ -52,16 +58,16 @@ jobs:
           New-LocalUser "test" -Password $Password -PasswordNeverExpires
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "test"
 
-          # --- Вместо рабочего стола: запуск 1С при подключении (закрыл 1С -> сессия завершена) ---
+          # --- Вместо рабочего стола: запуск программы при подключении ---
           $pol = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services'
           New-Item -Path $pol -Force | Out-Null
-          Set-ItemProperty -Path $pol -Name InitialProgram -Value "`"$1c`""
-          Set-ItemProperty -Path $pol -Name WorkDirectory  -Value (Split-Path $1c)
+          Set-ItemProperty -Path $pol -Name InitialProgram -Value "`"$app`""
+          Set-ItemProperty -Path $pol -Name WorkDirectory  -Value (Split-Path $app)
 
           $ws = 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
           Set-ItemProperty -Path $ws -Name fInheritInitialProgram -Value 0
-          Set-ItemProperty -Path $ws -Name InitialProgram -Value "`"$1c`""
-          Set-ItemProperty -Path $ws -Name WorkDirectory -Value (Split-Path $1c)
+          Set-ItemProperty -Path $ws -Name InitialProgram -Value "`"$app`""
+          Set-ItemProperty -Path $ws -Name WorkDirectory -Value (Split-Path $app)
 
           Write-Host "Node ${{ matrix.node }} ready"
 
@@ -85,7 +91,7 @@ jobs:
           set -e
           for i in 1 2 3; do
             echo "Ждём win-node-$i в tailnet..."
-            for t in $(seq 1 90); do
+            for t in $(seq 1 40); do
               ip=$(tailscale ip -4 win-node-$i 2>/dev/null || true)
               if [ -n "$ip" ] && timeout 3 bash -c "</dev/tcp/$ip/3389" 2>/dev/null; then
                 echo "win-node-$i = $ip : 3389 OK"
@@ -93,7 +99,11 @@ jobs:
                 break
               fi
               sleep 10
-              if [ "$t" = "90" ]; then echo "win-node-$i не появился"; tailscale status; exit 1; fi
+              if [ "$t" = "40" ]; then
+                echo "::error::win-node-$i не появился за 400 с"
+                tailscale status
+                exit 1
+              fi
             done
           done
 
