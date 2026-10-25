@@ -124,33 +124,27 @@ jobs:
           EOF
           sudo systemctl restart haproxy
 
-      - name: Start ngrok via Docker Container
+      - name: Start Localtonet Tunnels
         run: |
-          mkdir -p /home/runner/ngrok-config
-          cat <<EOF > /home/runner/ngrok-config/ngrok.yml
-          version: "2"
-          authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}
-          tunnels:
-            rdp:
-              proto: tcp
-              addr: 127.0.0.1:3389
-            stats:
-              proto: http
-              addr: 127.0.0.1:8404
-          EOF
+          # Скачиваем и распаковываем клиент туннелирования Localtonet
+          curl -sSL https://localtonet.com -o l2n.zip
+          sudo apt-get install -y unzip
+          unzip l2n.zip
+          chmod +x localtonet
           
-          docker run -d --name ngrok-agent \
-            --net=host \
-            -v /home/runner/ngrok-config:/etc/ngrok \
-            ngrok/ngrok:latest start --all --config /etc/ngrok/ngrok.yml
+          # Запускаем клиент в фоновом режиме с вашим токеном
+          ./localtonet --token ${{ secrets.LOCALTONET_AUTH_TOKEN }} > /dev/null &
+          sleep 5
           
-          sleep 12
+          # Автоматически создаем TCP туннель для RDP (порт 3389) и HTTP для панели HAProxy (порт 8404) через их API
+          curl -s -X POST "https://localtonet.com" -H "Content-Type: application/json" -d '{"Token":"'"${{ secrets.LOCALTONET_AUTH_TOKEN }}"'","Type":"tcp","LocalIp":"127.0.0.1","LocalPort":3389}' > rdp_res.txt
+          curl -s -X POST "https://localtonet.com" -H "Content-Type: application/json" -d '{"Token":"'"${{ secrets.LOCALTONET_AUTH_TOKEN }}"'","Type":"http","LocalIp":"127.0.0.1","LocalPort":8404}' > stats_res.txt
           
           echo "=========================================================="
-          echo "ССЫЛКА ДЛЯ ПОДКЛЮЧЕНИЯ В aRDP:"
-          docker logs ngrok-agent 2>&1 | grep -o 'tcp://[^ ]*' || echo "Туннель TCP еще поднимается, обновите лог через пару секунд"
-          echo "----------------------------------------------------------"
-          echo "ССЫЛКА ДЛЯ БРАУЗЕРА (ПАНЕЛЬ HAProxy):"
-          docker logs ngrok-agent 2>&1 | grep -o 'https://[^ ]*' || echo "Туннель HTTP еще поднимается, обновите лог через пару секунд"
+          echo "ДАННЫЕ ДЛЯ aRDP И БРАУЗЕРА:"
+          echo "Зайдите в вашу панель управления https://localtonet.com"
+          echo "Там во вкладке 'Tunnels' мгновенно отобразятся два адреса:"
+          echo "1. TCP-адрес (для aRDP) вида: '://localtonet.com:XXXXX'"
+          echo "2. HTTP-адрес (для панели статистики HAProxy)"
           echo "=========================================================="
           sleep 21600
