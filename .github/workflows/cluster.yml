@@ -126,13 +126,11 @@ jobs:
 
       - name: Deploy Free FRP Tunnels via Docker
         run: |
-          # Создаем динамические случайные порты для проброса
           RDP_PORT=$((15000 + RANDOM % 20000))
           STATS_PORT=$((36000 + RANDOM % 20000))
           
           mkdir -p /home/runner/frp-config
           
-          # Генерируем конфигурационный файл для frpc
           cat <<EOF > /home/runner/frp-config/frpc.toml
           serverAddr = "v2.frp.one"
           serverPort = 7000
@@ -152,11 +150,11 @@ jobs:
           remotePort = $STATS_PORT
           EOF
           
-          # Запускаем официальный стабильный Docker-контейнер frpc в сети хоста
+          # Явно зафиксированная существующая версия контейнера v0.54.0
           docker run -d --name frp-client \
             --net=host \
             -v /home/runner/frp-config:/etc/frp \
-            fatedier/frpc:latest -c /etc/frp/frpc.toml
+            fatedier/frpc:v0.54.0 -c /etc/frp/frpc.toml
           
           sleep 5
           
